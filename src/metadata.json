@@ -1,0 +1,5 @@
+{
+  "name": "Roulette Pattern Analyzer",
+  "description": "An advanced tool to analyze roulette patterns by tracking dozens. Users can input results via dedicated buttons for each dozen and zero, view a detailed history, and receive AI-powered suggestions based on customizable analysis strategies like trend-following or mean reversion.",
+  "requestFramePermissions": []
+}
