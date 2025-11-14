@@ -44,10 +44,13 @@ const Controls: React.FC<ControlsProps> = ({
 
                 <h2 className="text-xl font-bold text-white mb-4">Añadir Entrada</h2>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => onAddEntry('D1')} className="py-3 px-2 text-center font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">Docena 1</button>
-                    <button onClick={() => onAddEntry('D2')} className="py-3 px-2 text-center font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">Docena 2</button>
-                    <button onClick={() => onAddEntry('D3')} className="py-3 px-2 text-center font-semibold rounded-lg bg-amber-600 hover:bg-amber-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">Docena 3</button>
-                    <button onClick={() => onAddEntry('Cero')} className="py-3 px-2 text-center font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">Cero</button>
+                    <button onClick={() => onAddEntry('D1')} className="py-3 px-2 text-center font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">D1 (1-12)</button>
+                    <button onClick={() => onAddEntry('D3')} className="py-3 px-2 text-center font-semibold rounded-lg bg-amber-600 hover:bg-amber-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">D3 (25-36)</button>
+                    <button onClick={() => onAddEntry('D2H1')} className="py-3 px-2 text-center font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">D2 (13-18)</button>
+                    <button onClick={() => onAddEntry('D2H2')} className="py-3 px-2 text-center font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">D2 (19-24)</button>
+                    <div className="col-span-2">
+                        <button onClick={() => onAddEntry('Cero')} className="w-full py-3 px-2 text-center font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 transition-all duration-200 text-white shadow-md transform hover:scale-105 active:scale-100">Cero</button>
+                    </div>
                 </div>
             </div>
 

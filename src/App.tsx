@@ -24,12 +24,19 @@ import {
 const deepCopy = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
 const calculateFrequencies = (history: HistoryEntry[]): Frequencies => {
-    const counts: Frequencies['counts'] = { D1: 0, D2: 0, D3: 0, Cero: 0 };
+    const internalCounts: Record<HistoryEntry, number> = { D1: 0, D2H1: 0, D2H2: 0, D3: 0, Cero: 0 };
     history.forEach(entry => {
-        if (entry in counts) {
-            counts[entry]++;
+        if (entry in internalCounts) {
+            internalCounts[entry]++;
         }
     });
+
+    const counts: Frequencies['counts'] = {
+        D1: internalCounts.D1,
+        D2: internalCounts.D2H1 + internalCounts.D2H2,
+        D3: internalCounts.D3,
+        Cero: internalCounts.Cero
+    };
 
     const dozenEntries = (['D1', 'D2', 'D3'] as Dozen[]).map(d => ({ dozen: d, count: counts[d] }));
     dozenEntries.sort((a, b) => a.count - b.count);
@@ -63,8 +70,8 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
     if (bettingMode === 'mitades' && useAdvancedHalves && !strategy.includes('mitad')) {
          const halfCounts = { '1-18': 0, '19-36': 0 };
          history.forEach(spin => {
-            if(spin === 'D1') halfCounts['1-18']++;
-            else if (spin === 'D3') halfCounts['19-36']++;
+            if(spin === 'D1' || spin === 'D2H1') halfCounts['1-18']++;
+            else if (spin === 'D3' || spin === 'D2H2') halfCounts['19-36']++;
          });
          
          switch(strategy) {
@@ -87,16 +94,14 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
                     reason = 'No hay historial de docenas para la estrategia seguidor.';
                     break;
                 }
-                if (lastDozenSpin === 'D1') {
+                if (lastDozenSpin === 'D1' || lastDozenSpin === 'D2H1') { // First half
                     play = '19-36';
-                    reason = `Seguidor de Mitad: El último fue '1-18' (D1), apostando al opuesto.`;
+                    reason = `Seguidor de Mitad: El último fue '1-18', apostando al opuesto.`;
                     isBettingOpportunity = true;
-                } else if (lastDozenSpin === 'D3') {
+                } else if (lastDozenSpin === 'D3' || lastDozenSpin === 'D2H2') { // Second half
                     play = '1-18';
-                    reason = `Seguidor de Mitad: El último fue '19-36' (D3), apostando al opuesto.`;
+                    reason = `Seguidor de Mitad: El último fue '19-36', apostando al opuesto.`;
                     isBettingOpportunity = true;
-                } else { // D2
-                     reason = `Seguidor de Mitad: El último fue D2, que es neutral. Esperando.`;
                 }
                 break;
             }
@@ -107,16 +112,16 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
                     break;
                 }
                 const recentSpins = history.slice(0, SLEEP_THRESHOLD);
-                const sawD1 = recentSpins.includes('D1');
-                const sawD3 = recentSpins.includes('D3');
+                const sawFirstHalf = recentSpins.some(s => s === 'D1' || s === 'D2H1');
+                const sawSecondHalf = recentSpins.some(s => s === 'D3' || s === 'D2H2');
 
-                if (!sawD1 && sawD3) {
+                if (!sawFirstHalf && sawSecondHalf) {
                     play = '1-18';
-                    reason = `Durmiente de Mitad: '1-18' (D1) no ha salido en ${SLEEP_THRESHOLD} giros.`;
+                    reason = `Durmiente de Mitad: '1-18' no ha salido en ${SLEEP_THRESHOLD} giros.`;
                     isBettingOpportunity = true;
-                } else if (sawD1 && !sawD3) {
+                } else if (sawFirstHalf && !sawSecondHalf) {
                     play = '19-36';
-                    reason = `Durmiente de Mitad: '19-36' (D3) no ha salido en ${SLEEP_THRESHOLD} giros.`;
+                    reason = `Durmiente de Mitad: '19-36' no ha salido en ${SLEEP_THRESHOLD} giros.`;
                     isBettingOpportunity = true;
                 } else {
                     reason = 'No hay una única mitad "durmiente" clara.';
@@ -162,7 +167,13 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
                 break;
             }
             const recentSpins = history.slice(0, SLEEP_THRESHOLD);
-            const seenDozens = new Set(recentSpins.filter(s => s !== 'Cero'));
+            const seenDozens = new Set<Dozen>();
+            recentSpins.forEach(s => {
+                if (s === 'D1') seenDozens.add('D1');
+                if (s === 'D2H1' || s === 'D2H2') seenDozens.add('D2');
+                if (s === 'D3') seenDozens.add('D3');
+            });
+
             const sleepingDozens = allDozens.filter(d => !seenDozens.has(d));
 
             if (sleepingDozens.length === 1) {
@@ -182,11 +193,16 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
             break;
         }
         case 'seguidor': {
-            const lastDozen = history.find(s => s !== 'Cero') as Dozen | undefined;
-            if (!lastDozen) {
+            const lastSpin = history.find(s => s !== 'Cero');
+            if (!lastSpin) {
                  reason = 'No hay historial de docenas para la estrategia seguidor.';
                  break;
             }
+            let lastDozen: Dozen;
+            if (lastSpin === 'D1') lastDozen = 'D1';
+            else if (lastSpin === 'D2H1' || lastSpin === 'D2H2') lastDozen = 'D2';
+            else lastDozen = 'D3';
+
             if (dozenBettingMode === 'single') {
                 play = lastDozen;
                 reason = `Estrategia Seguidor: Apostando a la última docena que salió (${lastDozen}).`;
@@ -201,9 +217,8 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
         case 'mitad-fria': {
             const halfCounts = { '1-18': 0, '19-36': 0 };
             history.forEach(spin => {
-                if(spin === 'D1') halfCounts['1-18']++;
-                else if (spin === 'D3') halfCounts['19-36']++;
-                // D2 is ignored for halves analysis
+                if(spin === 'D1' || spin === 'D2H1') halfCounts['1-18']++;
+                else if (spin === 'D3' || spin === 'D2H2') halfCounts['19-36']++;
             });
             play = halfCounts['1-18'] <= halfCounts['19-36'] ? '1-18' : '19-36';
             reason = `Corrección de Mitad: Apostando a la mitad más fría (${play}).`;
@@ -211,10 +226,10 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
             break;
         }
         case 'mitad-caliente': {
-             const halfCounts = { '1-18': 0, '19-36': 0 };
+            const halfCounts = { '1-18': 0, '19-36': 0 };
             history.forEach(spin => {
-                if(spin === 'D1') halfCounts['1-18']++;
-                else if (spin === 'D3') halfCounts['19-36']++;
+                if(spin === 'D1' || spin === 'D2H1') halfCounts['1-18']++;
+                else if (spin === 'D3' || spin === 'D2H2') halfCounts['19-36']++;
             });
             play = halfCounts['1-18'] >= halfCounts['19-36'] ? '1-18' : '19-36';
             reason = `Tendencia de Mitad: Apostando a la mitad más caliente (${play}).`;
@@ -507,15 +522,20 @@ function App() {
                         } else {
                             if (currentBettingModeForStrategy === 'docenas') {
                                 const winningDozens = lastAnalysis.play.split(' y ') as Dozen[];
-                                if (winningDozens.includes(outcome as Dozen)) {
+                                let outcomeDozen: Dozen;
+                                if (outcome === 'D1') outcomeDozen = 'D1';
+                                else if (outcome === 'D2H1' || outcome === 'D2H2') outcomeDozen = 'D2';
+                                else outcomeDozen = 'D3';
+                                
+                                if (winningDozens.includes(outcomeDozen)) {
                                     result = 'WIN';
                                     profit = potentialProfit;
                                 }
                             } else { // mitades
-                                 if (lastAnalysis.play === '1-18' && outcome === 'D1') {
+                                 if (lastAnalysis.play === '1-18' && (outcome === 'D1' || outcome === 'D2H1')) {
                                      result = 'WIN';
                                      profit = potentialProfit;
-                                } else if (lastAnalysis.play === '19-36' && outcome === 'D3') {
+                                } else if (lastAnalysis.play === '19-36' && (outcome === 'D3' || outcome === 'D2H2')) {
                                      result = 'WIN';
                                      profit = potentialProfit;
                                 }
@@ -535,8 +555,11 @@ function App() {
                             profit: profit,
                             balance: newBalance,
                             bettingMode: currentBettingModeForStrategy,
-                             ...(currentBettingModeForStrategy === 'docenas' && { dozenBettingMode: riskSettings.dozenBettingMode }),
                         };
+                        
+                        if (currentBettingModeForStrategy === 'docenas') {
+                            betEntry.dozenBettingMode = riskSettings.dozenBettingMode;
+                        }
                         
                         state.bettingSession.history.unshift(betEntry);
                         state.bettingSession.currentBalance = newBalance;

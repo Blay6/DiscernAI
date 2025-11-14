@@ -8,23 +8,30 @@ interface HistoryProps {
 export const SpinHistory: React.FC<HistoryProps> = ({ history }) => {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const getEntryStyle = (entry: HistoryEntry, isHighlighted: boolean): string => {
+    const getEntryStyle = (entry: HistoryEntry, isHighlighted: boolean): { className: string, text: string } => {
         const baseClasses = "aspect-square flex items-center justify-center rounded-lg font-bold text-white text-sm md:text-base transition-all duration-300 shadow-inner";
         
         let colorClasses = '';
+        let text = entry === 'Cero' ? '0' : entry;
+
         switch (entry) {
             case 'D1': colorClasses = 'bg-sky-600'; break;
-            case 'D2': colorClasses = 'bg-indigo-600'; break;
+            case 'D2H1':
+            case 'D2H2': 
+                colorClasses = 'bg-indigo-600'; 
+                text = 'D2';
+                break;
             case 'D3': colorClasses = 'bg-amber-600'; break;
             case 'Cero': colorClasses = 'bg-emerald-600'; break;
             default: colorClasses = 'bg-[#3b4452]'; break;
         }
 
+        let finalClassName = `${baseClasses} ${colorClasses}`;
         if (isHighlighted) {
-            return `${baseClasses} ${colorClasses} ring-4 ring-offset-2 ring-offset-[#1a1f25] ring-[#f0b90b] scale-110 shadow-lg z-10`;
+            finalClassName += ` ring-4 ring-offset-2 ring-offset-[#1a1f25] ring-[#f0b90b] scale-110 shadow-lg z-10`;
         }
         
-        return `${baseClasses} ${colorClasses}`;
+        return { className: finalClassName, text };
     };
 
     const historyToShow = isExpanded ? history.slice(0, 60) : history.slice(0, 10);
@@ -35,13 +42,16 @@ export const SpinHistory: React.FC<HistoryProps> = ({ history }) => {
             <div className="p-3 bg-[#1a1f25] rounded-lg flex-grow flex">
                 {historyToShow.length > 0 ? (
                     <div className="grid grid-cols-10 gap-1.5 w-full">
-                        {historyToShow.map((entry, index) => (
-                            <div key={index} className="relative">
-                                <div className={getEntryStyle(entry, index === 0)}>
-                                    {entry === 'Cero' ? '0' : entry}
+                        {historyToShow.map((entry, index) => {
+                            const { className, text } = getEntryStyle(entry, index === 0);
+                            return (
+                                <div key={index} className="relative">
+                                    <div className={className}>
+                                        {text}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="w-full h-full min-h-[150px] flex items-center justify-center text-center text-gray-400 bg-[#1a1f25] rounded-lg">

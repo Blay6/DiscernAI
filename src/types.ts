@@ -1,6 +1,6 @@
 export type Dozen = 'D1' | 'D2' | 'D3';
 export type Half = '1-18' | '19-36';
-export type HistoryEntry = Dozen | 'Cero';
+export type HistoryEntry = 'D1' | 'D2H1' | 'D2H2' | 'D3' | 'Cero';
 export type Strategy = 'hibrido' | 'frio' | 'caliente' | 'durmiente' | 'seguidor' | 'mitad-fria' | 'mitad-caliente';
 export type BettingMode = 'docenas' | 'mitades';
 export type AppView = 'dashboard' | 'statistics';

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Strategy, StrategyState, Dozen, BetHistoryEntry, BettingMode, RiskSettings } from '../types';
+import { Strategy, StrategyState, Dozen, BetHistoryEntry, BettingMode, RiskSettings, HistoryEntry } from '../types';
 
 // --- Calculation Helpers ---
 
@@ -84,11 +84,19 @@ const StatsCard: React.FC<{ title: string; value: string | number; valueClassNam
     </div>
 );
 
-const DozenStats: React.FC<{ spinHistory: StrategyState['spinHistory'] }> = ({ spinHistory }) => {
+const DozenStats: React.FC<{ spinHistory: HistoryEntry[] }> = ({ spinHistory }) => {
     const totalSpins = spinHistory.length;
     if (totalSpins === 0) return <div className="text-center text-gray-400 col-span-3">No hay datos de docenas.</div>;
-    const counts = { D1: 0, D2: 0, D3: 0, Cero: 0 };
-    spinHistory.forEach(s => counts[s]++);
+    
+    const counts: Record<Dozen | 'Cero', number> = { D1: 0, D2: 0, D3: 0, Cero: 0 };
+    spinHistory.forEach(s => {
+        if (s === 'D2H1' || s === 'D2H2') {
+            counts.D2++;
+        } else if (s in counts) {
+            counts[s as 'D1' | 'D3' | 'Cero']++;
+        }
+    });
+
     return (<>{(['D1', 'D2', 'D3'] as Dozen[]).map(dozen => (<div key={dozen} className="bg-[#1a1f25]/80 p-4 rounded-lg"><div className="flex justify-between items-baseline"><span className="font-bold text-lg">{dozen}</span><span className="text-gray-400 text-sm">{((counts[dozen] / totalSpins) * 100).toFixed(1)}%</span></div><div className="text-2xl font-bold">{counts[dozen]} <span className="text-base font-normal text-gray-300">apariciones</span></div></div>))}</>);
 };
 
