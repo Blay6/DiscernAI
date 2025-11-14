@@ -340,7 +340,8 @@ const calculateBet = (
     analysis: AnalysisResult,
     session: BettingSession,
     settings: RiskSettings,
-    bettingMode: BettingMode
+    bettingMode: BettingMode,
+    dozenBettingMode: 'single' | 'double'
 ): { mainBet: number; perDozen?: number; zeroBet: number; totalRisk: number; potentialProfit: number } | null => {
     if (!settings.isActive || !analysis.isBettingOpportunity || analysis.play === 'Esperar' || analysis.play.includes('Conflicto')) {
         return null;
@@ -357,7 +358,7 @@ const calculateBet = (
         odds = settings.oddsHalf;
         numBets = 1;
     } else { // 'docenas'
-        if (settings.dozenBettingMode === 'single') {
+        if (dozenBettingMode === 'single') {
             odds = settings.oddsSingleDozen;
             numBets = 1;
         } else { // 'double'
@@ -437,17 +438,32 @@ function App() {
     const [riskSettings, setRiskSettings] = useState<RiskSettings>(INITIAL_RISK_SETTINGS);
     
     const [allStrategyStates, setAllStrategyStates] = useState<Record<Strategy, StrategyState>>(() => {
-        const initialSession = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
-        const initialState: StrategyState = { spinHistory: [], bettingSession: initialSession };
-        return {
-            hibrido: deepCopy(initialState),
-            frio: deepCopy(initialState),
-            caliente: deepCopy(initialState),
-            durmiente: deepCopy(initialState),
-            seguidor: deepCopy(initialState),
-            'mitad-fria': deepCopy(initialState),
-            'mitad-caliente': deepCopy(initialState),
-        };
+        const strategies = [
+            'hibrido', 'frio', 'caliente', 'durmiente', 'seguidor',
+            'mitad-fria', 'mitad-caliente'
+        ] as Strategy[];
+
+        const initialStates: Record<Strategy, StrategyState> = {} as any;
+
+        strategies.forEach(strategy => {
+            const isStandardHalfStrategy = strategy.includes('mitad');
+            const bettingSessions: Record<string, BettingSession> = {};
+            
+            if (isStandardHalfStrategy) {
+                bettingSessions['mitades_standard'] = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
+            } else {
+                bettingSessions['docenas_single'] = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
+                bettingSessions['docenas_double'] = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
+                bettingSessions['mitades_advanced'] = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
+            }
+
+            initialStates[strategy] = {
+                spinHistory: [],
+                bettingSessions: bettingSessions,
+            };
+        });
+
+        return initialStates;
     });
 
     const [bettingMode, setBettingMode] = useState<BettingMode>('docenas');
@@ -470,10 +486,19 @@ function App() {
     }, [representativeSpinHistory, riskSettings, bettingMode]);
     
     useEffect(() => {
-        const viewedSession = (allStrategyStates[viewedStrategy] || allStrategyStates.hibrido).bettingSession;
-        // The bet calculation is now contextual to the VIEWED strategy's session state,
-        // ensuring the displayed plan matches the selected history.
-        const newBet = calculateBet(analysisResult, viewedSession, riskSettings, bettingMode);
+        const getActiveSessionForView = (): BettingSession => {
+            const state = allStrategyStates[viewedStrategy] || allStrategyStates.hibrido;
+            const sessions = state.bettingSessions;
+            const isStandardHalf = viewedStrategy.includes('mitad');
+
+            if (bettingMode === 'mitades') {
+                return isStandardHalf ? sessions.mitades_standard : sessions.mitades_advanced;
+            }
+            return riskSettings.dozenBettingMode === 'single' ? sessions.docenas_single : sessions.docenas_double;
+        };
+
+        const viewedSession = getActiveSessionForView();
+        const newBet = calculateBet(analysisResult, viewedSession, riskSettings, bettingMode, riskSettings.dozenBettingMode);
         setCalculatedBet(newBet);
     }, [analysisResult, allStrategyStates, viewedStrategy, riskSettings, bettingMode]);
     
@@ -482,10 +507,12 @@ function App() {
             setAllStrategyStates(prev => {
                 const newStates = deepCopy(prev);
                 (Object.keys(newStates) as Strategy[]).forEach(s => {
-                    if (newStates[s].bettingSession.history.length === 0) {
-                         newStates[s].bettingSession.currentBalance = riskSettings.startBalance;
-                         newStates[s].bettingSession.nextZeroBetThreshold = riskSettings.startBalance - riskSettings.zeroThreshold;
-                    }
+                    Object.values(newStates[s].bettingSessions).forEach(session => {
+                        if (session.history.length === 0) {
+                            session.currentBalance = riskSettings.startBalance;
+                            session.nextZeroBetThreshold = riskSettings.startBalance - riskSettings.zeroThreshold;
+                        }
+                    });
                 });
                 return newStates;
             });
@@ -496,84 +523,94 @@ function App() {
         setAllStrategyStates(prevStates => {
             const newStates = deepCopy(prevStates);
             
-            (Object.keys(newStates) as Strategy[]).forEach(s => {
-                const strategy = s as Strategy;
-                const state = newStates[strategy];
-                
-                const analysisHistory = state.spinHistory.slice(0, riskSettings.analysisWindow);
-                const isStandardHalfStrategy = strategy.includes('mitad');
-                const isDozenStrategyInHalfMode = !isStandardHalfStrategy && riskSettings.useAdvancedHalvesAnalysis;
-                const currentBettingModeForStrategy = (isStandardHalfStrategy || isDozenStrategyInHalfMode) ? 'mitades' : 'docenas';
-                
-                if (riskSettings.isActive && isBettingActive && state.bettingSession.history.length < state.spinHistory.length + 1) {
-                    const lastAnalysis = runSingleStrategyAnalysis(analysisHistory, strategy, currentBettingModeForStrategy, riskSettings.useAdvancedHalvesAnalysis, riskSettings.dozenBettingMode);
-                    const lastBet = calculateBet(lastAnalysis, state.bettingSession, riskSettings, currentBettingModeForStrategy);
+            const processScenario = (
+                session: BettingSession,
+                spinHistory: HistoryEntry[],
+                strategy: Strategy,
+                bettingMode: BettingMode,
+                dozenBettingMode: 'single' | 'double',
+                useAdvancedHalves: boolean
+            ) => {
+                if (!riskSettings.isActive || !isBettingActive || session.history.length >= spinHistory.length + 1) {
+                    return;
+                }
+                const analysisHistory = spinHistory.slice(0, riskSettings.analysisWindow);
+                const lastAnalysis = runSingleStrategyAnalysis(analysisHistory, strategy, bettingMode, useAdvancedHalves, dozenBettingMode);
+                const lastBet = calculateBet(lastAnalysis, session, riskSettings, bettingMode, dozenBettingMode);
 
-                    if (lastBet && lastAnalysis.isBettingOpportunity) {
-                        const { totalRisk, mainBet, zeroBet, potentialProfit } = lastBet;
-                        let result: 'WIN' | 'LOSS' = 'LOSS';
-                        let profit = -totalRisk;
+                if (lastBet && lastAnalysis.isBettingOpportunity) {
+                    const { totalRisk, mainBet, zeroBet, potentialProfit } = lastBet;
+                    let result: 'WIN' | 'LOSS' = 'LOSS';
+                    let profit = -totalRisk;
 
-                        if (outcome === 'Cero') {
-                           if (zeroBet > 0) {
-                               profit = (zeroBet * (riskSettings.zeroPayout + 1)) - totalRisk;
-                               result = profit > 0 ? 'WIN' : 'LOSS';
-                           }
-                        } else {
-                            if (currentBettingModeForStrategy === 'docenas') {
-                                const winningDozens = lastAnalysis.play.split(' y ') as Dozen[];
-                                let outcomeDozen: Dozen;
-                                if (outcome === 'D1') outcomeDozen = 'D1';
-                                else if (outcome === 'D2H1' || outcome === 'D2H2') outcomeDozen = 'D2';
-                                else outcomeDozen = 'D3';
-                                
-                                if (winningDozens.includes(outcomeDozen)) {
+                    if (outcome === 'Cero') {
+                        if (zeroBet > 0) {
+                            profit = (zeroBet * (riskSettings.zeroPayout + 1)) - totalRisk;
+                            result = profit > 0 ? 'WIN' : 'LOSS';
+                        }
+                    } else {
+                        if (bettingMode === 'docenas') {
+                            const winningDozens = lastAnalysis.play.split(' y ') as Dozen[];
+                            let outcomeDozen: Dozen;
+                            if (outcome === 'D1') outcomeDozen = 'D1';
+                            else if (outcome === 'D2H1' || outcome === 'D2H2') outcomeDozen = 'D2';
+                            else outcomeDozen = 'D3';
+                            
+                            if (winningDozens.includes(outcomeDozen)) {
+                                result = 'WIN';
+                                profit = potentialProfit;
+                            }
+                        } else { // mitades
+                                if (lastAnalysis.play === '1-18' && (outcome === 'D1' || outcome === 'D2H1')) {
                                     result = 'WIN';
                                     profit = potentialProfit;
-                                }
-                            } else { // mitades
-                                 if (lastAnalysis.play === '1-18' && (outcome === 'D1' || outcome === 'D2H1')) {
-                                     result = 'WIN';
-                                     profit = potentialProfit;
-                                } else if (lastAnalysis.play === '19-36' && (outcome === 'D3' || outcome === 'D2H2')) {
-                                     result = 'WIN';
-                                     profit = potentialProfit;
-                                }
+                            } else if (lastAnalysis.play === '19-36' && (outcome === 'D3' || outcome === 'D2H2')) {
+                                    result = 'WIN';
+                                    profit = potentialProfit;
                             }
                         }
-                        
-                        const newBalance = state.bettingSession.currentBalance + profit;
-
-                        const betEntry: BetHistoryEntry = {
-                            round: state.bettingSession.currentRound,
-                            suggestion: lastAnalysis.play,
-                            betAmount: mainBet,
-                            zeroBetAmount: zeroBet,
-                            totalRisk: totalRisk,
-                            outcome: outcome,
-                            result: result,
-                            profit: profit,
-                            balance: newBalance,
-                            bettingMode: currentBettingModeForStrategy,
-                        };
-                        
-                        if (currentBettingModeForStrategy === 'docenas') {
-                            betEntry.dozenBettingMode = riskSettings.dozenBettingMode;
-                        }
-                        
-                        state.bettingSession.history.unshift(betEntry);
-                        state.bettingSession.currentBalance = newBalance;
-                        state.bettingSession.totalProfit += profit;
-                        state.bettingSession.currentRound += 1;
-                        if (result === 'LOSS') {
-                            state.bettingSession.accumulatedLoss += totalRisk;
-                        } else {
-                            state.bettingSession.accumulatedLoss = 0;
-                            state.bettingSession.nextZeroBetThreshold = newBalance - riskSettings.zeroThreshold;
-                        }
+                    }
+                    
+                    const newBalance = session.currentBalance + profit;
+                    const betEntry: BetHistoryEntry = {
+                        round: session.currentRound,
+                        suggestion: lastAnalysis.play,
+                        betAmount: mainBet,
+                        zeroBetAmount: zeroBet,
+                        totalRisk: totalRisk,
+                        outcome: outcome,
+                        result: result,
+                        profit: profit,
+                        balance: newBalance,
+                        bettingMode: bettingMode,
+                        ...(bettingMode === 'docenas' && { dozenBettingMode: dozenBettingMode })
+                    };
+                    
+                    session.history.unshift(betEntry);
+                    session.currentBalance = newBalance;
+                    session.totalProfit += profit;
+                    session.currentRound += 1;
+                    if (result === 'LOSS') {
+                        session.accumulatedLoss += totalRisk;
+                    } else {
+                        session.accumulatedLoss = 0;
+                        session.nextZeroBetThreshold = newBalance - riskSettings.zeroThreshold;
                     }
                 }
+            };
+
+            (Object.keys(newStates) as Strategy[]).forEach(s => {
+                const state = newStates[s];
+                const isStandardHalfStrategy = s.includes('mitad');
                 
+                if (isStandardHalfStrategy) {
+                    processScenario(state.bettingSessions.mitades_standard, state.spinHistory, s, 'mitades', 'double', false);
+                } else {
+                    processScenario(state.bettingSessions.docenas_single, state.spinHistory, s, 'docenas', 'single', false);
+                    processScenario(state.bettingSessions.docenas_double, state.spinHistory, s, 'docenas', 'double', false);
+                    processScenario(state.bettingSessions.mitades_advanced, state.spinHistory, s, 'mitades', 'double', true);
+                }
+
                 state.spinHistory.unshift(outcome);
             });
             
@@ -587,24 +624,27 @@ function App() {
              (Object.keys(newStates) as Strategy[]).forEach(s => {
                 const state = newStates[s as Strategy];
                 if (state.spinHistory.length > 0) {
-                    const lastOutcome = state.spinHistory[0];
-                    state.spinHistory.shift();
+                    const lastOutcome = state.spinHistory.shift();
 
-                    if (riskSettings.isActive && state.bettingSession.history.length > 0) {
-                        const lastBet = state.bettingSession.history[0];
-                        if (lastBet.outcome === lastOutcome && (state.bettingSession.history.length === state.spinHistory.length + 1)) {
-                            state.bettingSession.history.shift();
-                            state.bettingSession.currentBalance -= lastBet.profit;
-                            state.bettingSession.totalProfit -= lastBet.profit;
-                            state.bettingSession.currentRound -= 1;
-                            
-                            // This is complex to revert accurately, simplified for now
-                             if (lastBet.result === 'LOSS') {
-                                state.bettingSession.accumulatedLoss -= lastBet.totalRisk;
-                            } else {
-                                state.bettingSession.accumulatedLoss = 0; // Simplified
+                    if (riskSettings.isActive) {
+                        Object.values(state.bettingSessions).forEach(session => {
+                            if (session.history.length > 0) {
+                                const lastBet = session.history[0];
+                                if (lastBet.outcome === lastOutcome && (session.history.length === (state.spinHistory.length ?? 0) + 1)) {
+                                    session.history.shift();
+                                    session.currentBalance -= lastBet.profit;
+                                    session.totalProfit -= lastBet.profit;
+                                    session.currentRound -= 1;
+                                    
+                                    // This is complex to revert accurately, simplified for now
+                                    if (lastBet.result === 'LOSS') {
+                                        session.accumulatedLoss -= lastBet.totalRisk;
+                                    } else {
+                                        session.accumulatedLoss = 0; // Simplified
+                                    }
+                                }
                             }
-                        }
+                        });
                     }
                 }
              });
@@ -616,7 +656,9 @@ function App() {
         setAllStrategyStates(prev => {
             const newStates = deepCopy(prev);
             (Object.keys(newStates) as Strategy[]).forEach(s => {
-                newStates[s].bettingSession = getInitialBettingSession(riskSettings.startBalance);
+                Object.keys(newStates[s].bettingSessions).forEach(key => {
+                    newStates[s].bettingSessions[key] = getInitialBettingSession(riskSettings.startBalance);
+                });
             });
             return newStates;
         });

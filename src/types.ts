@@ -70,5 +70,5 @@ export interface BettingSession {
 
 export interface StrategyState {
     spinHistory: HistoryEntry[];
-    bettingSession: BettingSession;
+    bettingSessions: Record<string, BettingSession>;
 }

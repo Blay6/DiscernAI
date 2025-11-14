@@ -1,11 +1,11 @@
 import React from 'react';
-import { StrategyState, RiskSettings, AnalysisResult, BettingMode, HistoryEntry, Strategy } from '../types';
+import { StrategyState, RiskSettings, AnalysisResult, BettingMode, HistoryEntry, Strategy, BettingSession } from '../types';
 import Controls from './Controls';
 import { SpinHistory, BetHistoryTable } from './History';
 import Analysis from './Analysis';
 
 // --- Helper Components ---
-const StatsSummary: React.FC<{ session: StrategyState['bettingSession']; settings: RiskSettings }> = ({ session, settings }) => {
+const StatsSummary: React.FC<{ session: BettingSession; settings: RiskSettings }> = ({ session, settings }) => {
     const profitPercentage = settings.startBalance > 0 ? (session.totalProfit / settings.startBalance) * 100 : 0;
     
     return (
@@ -73,10 +73,23 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
     const displayedState = allStrategyStates[viewedStrategy] || allStrategyStates.hibrido;
 
+    const getActiveSessionForView = (): BettingSession => {
+        const sessions = displayedState.bettingSessions;
+        const isStandardHalf = viewedStrategy.includes('mitad');
+
+        if (bettingMode === 'mitades') {
+            return isStandardHalf ? sessions.mitades_standard : sessions.mitades_advanced;
+        }
+        // bettingMode === 'docenas'
+        return riskSettings.dozenBettingMode === 'single' ? sessions.docenas_single : sessions.docenas_double;
+    };
+
+    const displayedSession = getActiveSessionForView();
+
     return (
         <div className="animate-fade-in">
             <header className="mb-6">
-                <StatsSummary session={displayedState.bettingSession} settings={riskSettings} />
+                <StatsSummary session={displayedSession} settings={riskSettings} />
             </header>
 
             <div className="dashboard-grid">
@@ -102,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         isRiskActive={riskSettings.isActive}
                     />
                     <div className="flex-grow">
-                        <BetHistoryTable history={displayedState.bettingSession.history} />
+                        <BetHistoryTable history={displayedSession.history} />
                     </div>
                 </main>
             </div>

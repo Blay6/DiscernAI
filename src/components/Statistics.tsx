@@ -158,14 +158,30 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
     const [dozenModeFilter, setDozenModeFilter] = useState<'single' | 'double' | 'all'>('all');
 
 
-    // Use a representative session for overall stats (hibrido is fine)
-    const overallSession = allStrategyStates.hibrido.bettingSession;
-    const overallHistory = overallSession.history;
-    const totalBets = overallHistory.length;
-    const totalWins = overallHistory.filter(h => h.result === 'WIN').length;
+    // Use a representative session for overall stats (hibrido is fine, as all spin histories are the same)
+    const representativeHistory = [
+        ...Object.values(allStrategyStates.hibrido.bettingSessions).flatMap(s => s.history)
+    ].sort((a,b) => b.round - a.round);
+    
+    const totalProfit = Object.values(allStrategyStates.hibrido.bettingSessions).reduce((acc, session) => acc + session.totalProfit, 0);
+
+    const totalBets = representativeHistory.length;
+    const totalWins = representativeHistory.filter(h => h.result === 'WIN').length;
     const totalLosses = totalBets - totalWins;
     const overallWinRate = totalBets > 0 ? (totalWins / totalBets) * 100 : 0;
-    const overallProfitPercentage = riskSettings.startBalance > 0 ? (overallSession.totalProfit / riskSettings.startBalance) * 100 : 0;
+    const overallProfitPercentage = riskSettings.startBalance > 0 ? (totalProfit / riskSettings.startBalance) * 100 : 0;
+
+    const getHistoryForModal = () => {
+        if (!viewingHistory) return [];
+        const sessions = allStrategyStates[viewingHistory].bettingSessions;
+        if (statsMode === 'mitades') {
+            const isStandardHalf = viewingHistory.includes('mitad');
+            return isStandardHalf ? sessions.mitades_standard.history : sessions.mitades_advanced.history;
+        }
+        if (dozenModeFilter === 'single') return sessions.docenas_single.history;
+        if (dozenModeFilter === 'double') return sessions.docenas_double.history;
+        return [...sessions.docenas_single.history, ...sessions.docenas_double.history].sort((a,b) => b.round - a.round);
+    };
 
     return (
         <>
@@ -202,25 +218,38 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {(Object.keys(allStrategyStates) as Strategy[]).map(strategy => {
                             const isStandardHalfStrategy = strategy.includes('mitad');
-                            
-                            if (statsMode === 'docenas' && isStandardHalfStrategy) {
-                                return null;
+                            const sessions = allStrategyStates[strategy].bettingSessions;
+                            let historyForCard: BetHistoryEntry[] = [];
+                            let cardIsVisible = false;
+
+                            if (statsMode === 'mitades') {
+                                if(isStandardHalfStrategy) {
+                                    historyForCard = sessions.mitades_standard.history;
+                                    cardIsVisible = true;
+                                } else {
+                                    historyForCard = sessions.mitades_advanced.history;
+                                    cardIsVisible = true;
+                                }
+                            } else { // docenas
+                                if (!isStandardHalfStrategy) {
+                                    cardIsVisible = true;
+                                    if(dozenModeFilter === 'single') {
+                                        historyForCard = sessions.docenas_single.history;
+                                    } else if (dozenModeFilter === 'double') {
+                                        historyForCard = sessions.docenas_double.history;
+                                    } else {
+                                        historyForCard = [...sessions.docenas_single.history, ...sessions.docenas_double.history].sort((a,b) => b.round - a.round);
+                                    }
+                                }
                             }
                             
-                            if (statsMode === 'mitades' && !isStandardHalfStrategy && !riskSettings.useAdvancedHalvesAnalysis) {
-                                return null;
-                            }
-                            
-                            let filteredHistory = allStrategyStates[strategy].bettingSession.history.filter(bet => bet.bettingMode === statsMode);
-                             if (statsMode === 'docenas' && dozenModeFilter !== 'all') {
-                                filteredHistory = filteredHistory.filter(bet => bet.dozenBettingMode === dozenModeFilter);
-                            }
+                            if (!cardIsVisible) return null;
                             
                             return (
                                 <StrategyAnalysisCard 
-                                    key={strategy}
+                                    key={`${strategy}-${statsMode}-${dozenModeFilter}`}
                                     strategyName={strategy}
-                                    history={filteredHistory} 
+                                    history={historyForCard} 
                                     startBalance={riskSettings.startBalance}
                                     onViewHistory={() => setViewingHistory(strategy)}
                                 />
@@ -232,13 +261,7 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
             {viewingHistory && (
                 <HistoryModal 
                     strategy={viewingHistory} 
-                    history={(() => {
-                        let history = allStrategyStates[viewingHistory].bettingSession.history.filter(bet => bet.bettingMode === statsMode);
-                        if (statsMode === 'docenas' && dozenModeFilter !== 'all') {
-                            history = history.filter(bet => bet.dozenBettingMode === dozenModeFilter);
-                        }
-                        return history;
-                    })()}
+                    history={getHistoryForModal()}
                     onClose={() => setViewingHistory(null)} 
                 />
             )}
