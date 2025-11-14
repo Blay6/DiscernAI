@@ -40,11 +40,12 @@ const calculateFrequencies = (history: HistoryEntry[]): Frequencies => {
     return { counts, hot, cold };
 };
 
-const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, bettingMode: BettingMode, useAdvancedHalves: boolean): AnalysisResult => {
+const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, bettingMode: BettingMode, useAdvancedHalves: boolean, dozenBettingMode: 'single' | 'double'): AnalysisResult => {
     const frequencies = calculateFrequencies(history);
     let play: string = 'Esperar';
     let reason = 'No hay una señal clara según la estrategia.';
     let isBettingOpportunity = false;
+    const analysisWindowSize = history.length;
     
     if (history.length < 5) {
         return {
@@ -52,6 +53,7 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
             reason: 'Se necesitan al menos 5 giros para un análisis inicial.',
             frequencies,
             isBettingOpportunity: false,
+            analysisWindowSize,
         };
     }
     
@@ -122,25 +124,35 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
                 break;
             }
          }
-        return { play, reason, frequencies, isBettingOpportunity };
+        return { play, reason, frequencies, isBettingOpportunity, analysisWindowSize };
     }
 
 
     switch(strategy) {
         case 'frio': {
             const suggestedDozen = frequencies.cold[0];
-            const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
-            play = betOnDozens.join(' y ');
-            reason = `Estrategia de Corrección: Apostar a las docenas que no son la más fría (${suggestedDozen}).`;
+            if (dozenBettingMode === 'single') {
+                play = suggestedDozen;
+                reason = `Estrategia de Corrección: Apostar a la docena más fría (${suggestedDozen}).`;
+            } else {
+                const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
+                play = betOnDozens.join(' y ');
+                reason = `Estrategia de Corrección: Apostar a las docenas que no son la más fría (${suggestedDozen}).`;
+            }
             isBettingOpportunity = true;
             break;
         }
         case 'caliente': {
             const suggestedDozen = frequencies.hot[0];
-            const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
-            play = betOnDozens.join(' y ');
-            reason = `Estrategia de Tendencia: Evitar la docena más caliente (${suggestedDozen}).`;
-             isBettingOpportunity = true;
+            if (dozenBettingMode === 'single') {
+                play = suggestedDozen;
+                reason = `Estrategia de Tendencia: Apostar a la docena más caliente (${suggestedDozen}) para seguir la racha.`;
+            } else {
+                const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
+                play = betOnDozens.join(' y ');
+                reason = `Estrategia Anti-Tendencia: Apostar a que la racha de la docena más caliente (${suggestedDozen}) se romperá.`;
+            }
+            isBettingOpportunity = true;
             break;
         }
         case 'durmiente': {
@@ -155,9 +167,14 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
 
             if (sleepingDozens.length === 1) {
                 const sleepingDozen = sleepingDozens[0];
-                const betOnDozens = allDozens.filter(d => d !== sleepingDozen);
-                play = betOnDozens.join(' y ');
-                reason = `Estrategia Durmiente: ${sleepingDozen} no ha salido en ${SLEEP_THRESHOLD} giros. Apostar al resto.`;
+                if (dozenBettingMode === 'single') {
+                    play = sleepingDozen;
+                    reason = `Estrategia Durmiente: ${sleepingDozen} no ha salido en ${SLEEP_THRESHOLD} giros. Apostar a ella.`;
+                } else {
+                    const betOnDozens = allDozens.filter(d => d !== sleepingDozen);
+                    play = betOnDozens.join(' y ');
+                    reason = `Estrategia Durmiente: ${sleepingDozen} no ha salido en ${SLEEP_THRESHOLD} giros. Apostar al resto.`;
+                }
                 isBettingOpportunity = true;
             } else {
                 reason = 'No hay una única docena "durmiente" clara.';
@@ -165,14 +182,19 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
             break;
         }
         case 'seguidor': {
-            if (history.length === 0 || history[0] === 'Cero') {
-                 reason = 'El último giro fue Cero o no hay historial, esperando una docena.';
+            const lastDozen = history.find(s => s !== 'Cero') as Dozen | undefined;
+            if (!lastDozen) {
+                 reason = 'No hay historial de docenas para la estrategia seguidor.';
                  break;
             }
-            const lastDozen = history[0];
-            const betOnDozens = allDozens.filter(d => d !== lastDozen);
-            play = betOnDozens.join(' y ');
-            reason = `Estrategia Seguidor: Evitando la última docena que salió (${lastDozen}).`;
+            if (dozenBettingMode === 'single') {
+                play = lastDozen;
+                reason = `Estrategia Seguidor: Apostando a la última docena que salió (${lastDozen}).`;
+            } else {
+                const betOnDozens = allDozens.filter(d => d !== lastDozen);
+                play = betOnDozens.join(' y ');
+                reason = `Estrategia Seguidor: Evitando la última docena que salió (${lastDozen}).`;
+            }
             isBettingOpportunity = true;
             break;
         }
@@ -202,22 +224,28 @@ const runSingleStrategyAnalysis = (history: HistoryEntry[], strategy: Strategy, 
         case 'hibrido':
         default: {
              const suggestedDozen = frequencies.cold[0] || 'D1';
-             const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
-             play = betOnDozens.join(' y ');
-             reason = `Estrategia Híbrida: Apostando a las docenas que no son la más fría (${suggestedDozen}).`;
+             if (dozenBettingMode === 'single') {
+                 play = suggestedDozen;
+                 reason = `Estrategia Híbrida: Apostando a la docena más fría (${suggestedDozen}).`;
+             } else {
+                 const betOnDozens = allDozens.filter(d => d !== suggestedDozen);
+                 play = betOnDozens.join(' y ');
+                 reason = `Estrategia Híbrida: Apostando a las docenas que no son la más fría (${suggestedDozen}).`;
+             }
              isBettingOpportunity = true;
              break;
         }
     }
 
-    return { play, reason, frequencies, isBettingOpportunity };
+    return { play, reason, frequencies, isBettingOpportunity, analysisWindowSize };
 };
 
 const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, bettingMode: BettingMode): AnalysisResult => {
-    const { analysisWindow, activeStrategies, useAdvancedHalvesAnalysis } = settings;
+    const { analysisWindow, activeStrategies, useAdvancedHalvesAnalysis, dozenBettingMode } = settings;
     
     const analysisHistory = history.slice(0, analysisWindow);
     const frequencies = calculateFrequencies(analysisHistory);
+    const analysisWindowSize = analysisHistory.length;
 
     if (analysisHistory.length < 5) {
         return {
@@ -225,6 +253,7 @@ const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, b
             reason: `Se necesitan al menos 5 giros (de ${analysisWindow} en ventana) para un análisis.`,
             frequencies,
             isBettingOpportunity: false,
+            analysisWindowSize,
         };
     }
 
@@ -234,12 +263,13 @@ const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, b
             reason: 'Por favor, active al menos una estrategia en la configuración.',
             frequencies,
             isBettingOpportunity: false,
+            analysisWindowSize,
         };
     }
 
     const suggestions: { play: string; strategy: Strategy }[] = [];
     activeStrategies.forEach(strategy => {
-        const result = runSingleStrategyAnalysis(analysisHistory, strategy, bettingMode, useAdvancedHalvesAnalysis);
+        const result = runSingleStrategyAnalysis(analysisHistory, strategy, bettingMode, useAdvancedHalvesAnalysis, dozenBettingMode);
         if (result.isBettingOpportunity) {
             suggestions.push({ play: result.play, strategy });
         }
@@ -251,6 +281,7 @@ const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, b
             reason: 'Ninguna estrategia activa encontró una oportunidad de apuesta clara.',
             frequencies,
             isBettingOpportunity: false,
+            analysisWindowSize,
         };
     }
 
@@ -271,6 +302,7 @@ const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, b
             reason: 'Múltiples sugerencias con el mismo apoyo. No hay un consenso claro.',
             frequencies,
             isBettingOpportunity: false,
+            analysisWindowSize,
         };
     }
 
@@ -284,6 +316,7 @@ const runConsensusAnalysis = (history: HistoryEntry[], settings: RiskSettings, b
         reason,
         frequencies,
         isBettingOpportunity: true,
+        analysisWindowSize,
     };
 };
 
@@ -303,14 +336,19 @@ const calculateBet = (
         : settings.initialBet;
 
     let odds;
-    let numBets = 1; // Default to 1 bet (for halves)
+    let numBets = 1;
     
     if (bettingMode === 'mitades') {
         odds = settings.oddsHalf;
         numBets = 1;
     } else { // 'docenas'
-        odds = settings.oddsDoubleDozen;
-        numBets = 2; // Always betting on two dozens
+        if (settings.dozenBettingMode === 'single') {
+            odds = settings.oddsSingleDozen;
+            numBets = 1;
+        } else { // 'double'
+            odds = settings.oddsDoubleDozen;
+            numBets = 2;
+        }
     }
     
     mainBet = Math.max(mainBet / (odds), settings.initialBet);
@@ -331,9 +369,11 @@ const calculateBet = (
     }
     
     const totalRisk = mainBet + zeroBet;
-    const potentialProfit = (perDozen ? perDozen * (settings.oddsSingleDozen + 1) : mainBet * (odds + 1)) - totalRisk;
+    const unitBet = mainBet / numBets;
+    const potentialProfit = unitBet * (settings.oddsSingleDozen + 1) - totalRisk;
 
-    return { mainBet, perDozen, zeroBet, totalRisk, potentialProfit };
+
+    return { mainBet, perDozen: perDozen, zeroBet, totalRisk, potentialProfit };
 };
 
 // --- Initial State Definitions ---
@@ -353,6 +393,7 @@ const INITIAL_RISK_SETTINGS: RiskSettings = {
     useAdvancedHalvesAnalysis: false,
     analysisWindow: 60,
     activeStrategies: ['hibrido'],
+    dozenBettingMode: 'double',
 };
 
 const INITIAL_ANALYSIS_RESULT: AnalysisResult = {
@@ -364,6 +405,7 @@ const INITIAL_ANALYSIS_RESULT: AnalysisResult = {
         cold: [],
     },
     isBettingOpportunity: false,
+    analysisWindowSize: 0,
 };
 
 const getInitialBettingSession = (startBalance: number): BettingSession => ({
@@ -380,7 +422,7 @@ function App() {
     const [riskSettings, setRiskSettings] = useState<RiskSettings>(INITIAL_RISK_SETTINGS);
     
     const [allStrategyStates, setAllStrategyStates] = useState<Record<Strategy, StrategyState>>(() => {
-        const initialSession = getInitialBettingSession(riskSettings.startBalance);
+        const initialSession = getInitialBettingSession(INITIAL_RISK_SETTINGS.startBalance);
         const initialState: StrategyState = { spinHistory: [], bettingSession: initialSession };
         return {
             hibrido: deepCopy(initialState),
@@ -395,6 +437,7 @@ function App() {
 
     const [bettingMode, setBettingMode] = useState<BettingMode>('docenas');
     const [currentView, setCurrentView] = useState<AppView>('dashboard');
+    const viewedStrategy = riskSettings.activeStrategies[0] || 'hibrido';
 
     const [isNavOpen, setIsNavOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -403,19 +446,21 @@ function App() {
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult>(INITIAL_ANALYSIS_RESULT);
     const [calculatedBet, setCalculatedBet] = useState<ReturnType<typeof calculateBet>>(null);
     
-    // For display purposes on the dashboard (spin history etc), we can use a representative state.
-    // The actual bet simulation runs on all states independently.
-    const activeState = allStrategyStates.hibrido;
+    // For consensus analysis, we use a representative history ('hibrido' is fine, as all spin histories are the same)
+    const representativeSpinHistory = allStrategyStates.hibrido.spinHistory;
 
     useEffect(() => {
-        const newAnalysis = runConsensusAnalysis(activeState.spinHistory, riskSettings, bettingMode);
+        const newAnalysis = runConsensusAnalysis(representativeSpinHistory, riskSettings, bettingMode);
         setAnalysisResult(newAnalysis);
-    }, [activeState.spinHistory, riskSettings, bettingMode]);
+    }, [representativeSpinHistory, riskSettings, bettingMode]);
     
     useEffect(() => {
-        const newBet = calculateBet(analysisResult, activeState.bettingSession, riskSettings, bettingMode);
+        const viewedSession = (allStrategyStates[viewedStrategy] || allStrategyStates.hibrido).bettingSession;
+        // The bet calculation is now contextual to the VIEWED strategy's session state,
+        // ensuring the displayed plan matches the selected history.
+        const newBet = calculateBet(analysisResult, viewedSession, riskSettings, bettingMode);
         setCalculatedBet(newBet);
-    }, [analysisResult, activeState.bettingSession, riskSettings, bettingMode]);
+    }, [analysisResult, allStrategyStates, viewedStrategy, riskSettings, bettingMode]);
     
     useEffect(() => {
         if (riskSettings.isActive) {
@@ -446,7 +491,7 @@ function App() {
                 const currentBettingModeForStrategy = (isStandardHalfStrategy || isDozenStrategyInHalfMode) ? 'mitades' : 'docenas';
                 
                 if (riskSettings.isActive && isBettingActive && state.bettingSession.history.length < state.spinHistory.length + 1) {
-                    const lastAnalysis = runSingleStrategyAnalysis(analysisHistory, strategy, currentBettingModeForStrategy, riskSettings.useAdvancedHalvesAnalysis);
+                    const lastAnalysis = runSingleStrategyAnalysis(analysisHistory, strategy, currentBettingModeForStrategy, riskSettings.useAdvancedHalvesAnalysis, riskSettings.dozenBettingMode);
                     const lastBet = calculateBet(lastAnalysis, state.bettingSession, riskSettings, currentBettingModeForStrategy);
 
                     if (lastBet && lastAnalysis.isBettingOpportunity) {
@@ -490,6 +535,7 @@ function App() {
                             profit: profit,
                             balance: newBalance,
                             bettingMode: currentBettingModeForStrategy,
+                             ...(currentBettingModeForStrategy === 'docenas' && { dozenBettingMode: riskSettings.dozenBettingMode }),
                         };
                         
                         state.bettingSession.history.unshift(betEntry);
@@ -593,7 +639,8 @@ function App() {
             <main className="p-4 sm:p-6 lg:p-8">
                 {currentView === 'dashboard' && (
                     <Dashboard 
-                        activeState={activeState}
+                        allStrategyStates={allStrategyStates}
+                        viewedStrategy={viewedStrategy}
                         riskSettings={riskSettings}
                         analysisResult={analysisResult}
                         bettingMode={bettingMode}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StrategyState, RiskSettings, AnalysisResult, BettingMode, HistoryEntry } from '../types';
+import { StrategyState, RiskSettings, AnalysisResult, BettingMode, HistoryEntry, Strategy } from '../types';
 import Controls from './Controls';
 import { SpinHistory, BetHistoryTable } from './History';
 import Analysis from './Analysis';
@@ -40,9 +40,9 @@ const StatsSummary: React.FC<{ session: StrategyState['bettingSession']; setting
     );
 };
 
-
 interface DashboardProps {
-    activeState: StrategyState;
+    allStrategyStates: Record<Strategy, StrategyState>;
+    viewedStrategy: Strategy;
     riskSettings: RiskSettings;
     analysisResult: AnalysisResult;
     bettingMode: BettingMode;
@@ -60,7 +60,8 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
-    activeState,
+    allStrategyStates,
+    viewedStrategy,
     riskSettings,
     analysisResult,
     bettingMode,
@@ -70,10 +71,12 @@ const Dashboard: React.FC<DashboardProps> = ({
     isBettingActive,
     onToggleBetting,
 }) => {
+    const displayedState = allStrategyStates[viewedStrategy] || allStrategyStates.hibrido;
+
     return (
         <div className="animate-fade-in">
             <header className="mb-6">
-                <StatsSummary session={activeState.bettingSession} settings={riskSettings} />
+                <StatsSummary session={displayedState.bettingSession} settings={riskSettings} />
             </header>
 
             <div className="dashboard-grid">
@@ -81,13 +84,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <Controls
                         onAddEntry={onAddEntry}
                         onUndo={onUndo}
-                        isUndoDisabled={activeState.spinHistory.length === 0}
+                        isUndoDisabled={displayedState.spinHistory.length === 0}
                         isBettingActive={isBettingActive}
                         onToggleBetting={onToggleBetting}
                         isRiskEnabled={riskSettings.isActive}
                     />
                     <div className="flex-grow min-h-[300px]">
-                        <SpinHistory history={activeState.spinHistory} />
+                        <SpinHistory history={displayedState.spinHistory} />
                     </div>
                 </aside>
 
@@ -99,7 +102,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         isRiskActive={riskSettings.isActive}
                     />
                     <div className="flex-grow">
-                        <BetHistoryTable history={activeState.bettingSession.history} />
+                        <BetHistoryTable history={displayedState.bettingSession.history} />
                     </div>
                 </main>
             </div>

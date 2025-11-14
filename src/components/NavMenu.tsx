@@ -1,4 +1,3 @@
-// FIX: Import React to bring the JSX namespace into scope.
 import React from 'react';
 import { AppView } from '../types';
 
@@ -14,7 +13,6 @@ const NavLink: React.FC<{
     label: string;
     isActive: boolean;
     onClick: () => void;
-    // FIX: Use React.ReactElement instead of JSX.Element for explicit typing to resolve namespace issue.
     icon: React.ReactElement;
 }> = ({ label, isActive, onClick, icon }) => (
     <button
@@ -61,7 +59,7 @@ const NavMenu: React.FC<NavMenuProps> = ({ isOpen, onClose, onNavigate, onOpenSe
                         label="Configuración"
                         isActive={false}
                         onClick={onOpenSettings}
-                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0l-.1.41a1.5 1.5 0 01-2.1 1.45l-.4-.17c-1.5-.65-3.22.8-2.57 2.3l.17.4a1.5 1.5 0 01-1.45 2.1l-.41.1c-1.56.38-1.56 2.6 0 2.98l.41.1a1.5 1.5 0 011.45 2.1l-.17.4c-.65 1.5.8 3.22 2.3 2.57l.4-.17a1.5 1.5 0 012.1 1.45l.1.41c.38 1.56 2.6 1.56 2.98 0l.1-.41a1.5 1.5 0 012.1-1.45l.4.17c1.5.65 3.22-.8 2.57-2.3l-.17-.4a1.5 1.5 0 011.45-2.1l.41-.1c1.56-.38-1.56-2.6 0-2.98l-.41-.1a1.5 1.5 0 01-1.45-2.1l.17-.4c.65-1.5-.8-3.22-2.3-2.57l-.4.17a1.5 1.5 0 01-2.1-1.45l-.1-.41zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>}
+                        icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0l-.1.41a1.5 1.5 0 01-2.1 1.45l-.4-.17c-1.5-.65-3.22.8-2.57 2.3l.17.4a1.5 1.5 0 01-1.45 2.1l-.41.1c-1.56.38-1.56 2.6 0 2.98l.41.1a1.5 1.5 0 011.45 2.1l-.17.4c-.65 1.5.8 3.22 2.3 2.57l.4-.17a1.5 1.5 0 012.1 1.45l.1.41c.38 1.56 2.6 1.56 2.98 0l.1-.41a1.5 1.5 0 012.1-1.45l.4.17c1.5.65 3.22-.8 2.57-2.3l-.17-.4a1.5 1.5 0 011.45-2.1l.41-.1c-1.56-.38-1.56-2.6 0-2.98l-.41-.1a1.5 1.5 0 01-1.45-2.1l.17-.4c.65-1.5-.8-3.22-2.3-2.57l-.4.17a1.5 1.5 0 01-2.1-1.45l-.1-.41zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>}
                     />
                 </div>
             </nav>

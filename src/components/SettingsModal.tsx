@@ -72,6 +72,8 @@ const strategyOptions: StrategyInfo[] = [
 ];
 
 const bettingModeOptions: { value: BettingMode; label: string }[] = [ { value: 'docenas', label: 'Docenas' }, { value: 'mitades', label: 'Mitades' } ];
+const dozenBettingModeOptions: { value: 'single' | 'double'; label: string }[] = [ { value: 'single', label: 'Una Docena' }, { value: 'double', label: 'Dos Docenas' } ];
+
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingMode, onSetBettingMode, riskSettings, onSetRiskSettings, onResetSession }) => {
 
@@ -79,14 +81,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingM
 
     const handleStrategyChange = (strategy: Strategy, checked: boolean) => {
         onSetRiskSettings(prev => {
-            const currentStrategies = prev.activeStrategies || [];
-            let newStrategies;
+            // When a new strategy is checked, it becomes the only active strategy.
             if (checked) {
-                newStrategies = [...new Set([...currentStrategies, strategy])];
-            } else {
-                newStrategies = currentStrategies.filter(s => s !== strategy);
+                return { ...prev, activeStrategies: [strategy] };
             }
-            return { ...prev, activeStrategies: newStrategies };
+            // Prevent unchecking the last active strategy. One must always be selected.
+            return prev;
         });
     };
 
@@ -100,6 +100,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingM
                     const newActive = (newSettings.activeStrategies || []).filter(s => s.includes('mitad'));
                     if (newActive.length === 0) newActive.push('mitad-fria');
                     newSettings.activeStrategies = newActive;
+                } else if (checked && bettingMode === 'mitades') {
+                    // if switching to advanced, ensure a valid strategy is selected
+                    const currentActive = newSettings.activeStrategies || [];
+                    if (currentActive.every(s => s.includes('mitad'))) {
+                        newSettings.activeStrategies = ['hibrido'];
+                    }
                 }
                 return newSettings;
             });
@@ -130,6 +136,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingM
                 <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
                     <h2 className="text-2xl font-bold text-white">Configuración y Estrategias</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors duration-200" aria-label="Cerrar configuración">
+                        {/* Fix: Corrected malformed SVG for the close icon. The original had invalid viewBox attribute and was missing the path element. */}
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -139,6 +146,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingM
                         <h3 className="text-xl font-bold text-white mb-3">Modo de Apuesta</h3>
                         <div className="grid grid-cols-2 gap-2">{bettingModeOptions.map(({ value, label }) => (<div key={value}><input type="radio" id={`mode-modal-${value}`} name="bettingMode-modal" value={value} checked={bettingMode === value} onChange={() => onSetBettingMode(value)} className="hidden peer" /><label htmlFor={`mode-modal-${value}`} className="block w-full text-center py-2.5 px-4 rounded-lg cursor-pointer transition-all duration-200 bg-[#3b4452]/70 border-2 border-transparent peer-hover:border-gray-400/50 peer-checked:bg-[#6366f1] peer-checked:text-white peer-checked:font-bold peer-checked:border-[#6366f1] peer-checked:shadow-[0_0_10px_rgba(99,102,241,0.5)]">{label}</label></div>))}</div>
                     </div>
+                     
+                    {bettingMode === 'docenas' && (
+                         <div className="pt-4 border-t border-white/10 animate-fade-in">
+                            <h3 className="text-lg font-semibold text-white mb-3">Tipo de Apuesta en Docenas</h3>
+                             <div className="grid grid-cols-2 gap-2">{dozenBettingModeOptions.map(({ value, label }) => (<div key={value}><input type="radio" id={`dozen-mode-modal-${value}`} name="dozenBettingMode-modal" value={value} checked={riskSettings.dozenBettingMode === value} onChange={() => onSetRiskSettings(prev => ({ ...prev, dozenBettingMode: value }))} className="hidden peer" /><label htmlFor={`dozen-mode-modal-${value}`} className="block w-full text-center py-2.5 px-4 rounded-lg cursor-pointer transition-all duration-200 bg-[#3b4452]/70 border-2 border-transparent peer-hover:border-gray-400/50 peer-checked:bg-indigo-500 peer-checked:text-white peer-checked:font-bold peer-checked:border-indigo-500 peer-checked:shadow-[0_0_10px_rgba(99,102,241,0.5)]">{label}</label></div>))}</div>
+                         </div>
+                    )}
                     
                     {bettingMode === 'mitades' && (
                         <div className="pt-4 border-t border-white/10 animate-fade-in">
@@ -156,13 +170,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, bettingM
                     )}
 
                     <div>
-                        <h3 className="text-xl font-bold text-white mb-3">Estrategias Activas</h3>
+                        <h3 className="text-xl font-bold text-white mb-3">Estrategia Activa</h3>
                         <p className="text-xs text-gray-400 mb-3">
                             {bettingMode === 'docenas' 
-                                ? "Seleccione una o más estrategias para análisis de docenas." 
+                                ? "Seleccione la estrategia para el análisis de docenas." 
                                 : riskSettings.useAdvancedHalvesAnalysis 
-                                    ? "Las estrategias de docenas se adaptarán para analizar mitades."
-                                    : "Seleccione una o más estrategias específicas para mitades."}
+                                    ? "La estrategia de docenas se adaptará para analizar mitades."
+                                    : "Seleccione la estrategia específica para mitades."}
                         </p>
                         <div className="animate-fade-in space-y-3">
                             <div style={{ display: (bettingMode === 'docenas' || riskSettings.useAdvancedHalvesAnalysis) ? 'block' : 'none' }}>

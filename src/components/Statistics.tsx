@@ -147,6 +147,8 @@ interface StatisticsProps {
 const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings }) => {
     const [viewingHistory, setViewingHistory] = useState<Strategy | null>(null);
     const [statsMode, setStatsMode] = useState<BettingMode>('docenas');
+    const [dozenModeFilter, setDozenModeFilter] = useState<'single' | 'double' | 'all'>('all');
+
 
     // Use a representative session for overall stats (hibrido is fine)
     const overallSession = allStrategyStates.hibrido.bettingSession;
@@ -175,13 +177,20 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4"><DozenStats spinHistory={allStrategyStates.hibrido.spinHistory} /></div>
                 </div>
                 <div>
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-2xl font-bold text-white">Análisis Detallado por Estrategia</h3>
+                    <div className="flex flex-col sm:flex-row justify-between items-center mb-4">
+                        <h3 className="text-2xl font-bold text-white mb-3 sm:mb-0">Análisis Detallado por Estrategia</h3>
                         <div className="flex items-center gap-2 p-1 rounded-lg bg-[#1a1f25]">
                             <button onClick={() => setStatsMode('docenas')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${statsMode === 'docenas' ? 'bg-[#f0b90b] text-black' : 'hover:bg-white/10'}`}>Docenas</button>
                             <button onClick={() => setStatsMode('mitades')} className={`px-4 py-1 text-sm font-semibold rounded-md transition-colors ${statsMode === 'mitades' ? 'bg-[#f0b90b] text-black' : 'hover:bg-white/10'}`}>Mitades</button>
                         </div>
                     </div>
+                     {statsMode === 'docenas' && (
+                        <div className="flex justify-center items-center gap-2 p-1 rounded-lg bg-[#1a1f25] mb-4 max-w-sm mx-auto">
+                            <button onClick={() => setDozenModeFilter('all')} className={`w-full px-3 py-1 text-xs font-semibold rounded-md transition-colors ${dozenModeFilter === 'all' ? 'bg-indigo-500 text-white' : 'hover:bg-white/10'}`}>Todas</button>
+                            <button onClick={() => setDozenModeFilter('single')} className={`w-full px-3 py-1 text-xs font-semibold rounded-md transition-colors ${dozenModeFilter === 'single' ? 'bg-indigo-500 text-white' : 'hover:bg-white/10'}`}>Una Docena</button>
+                            <button onClick={() => setDozenModeFilter('double')} className={`w-full px-3 py-1 text-xs font-semibold rounded-md transition-colors ${dozenModeFilter === 'double' ? 'bg-indigo-500 text-white' : 'hover:bg-white/10'}`}>Dos Docenas</button>
+                        </div>
+                     )}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {(Object.keys(allStrategyStates) as Strategy[]).map(strategy => {
                             const isStandardHalfStrategy = strategy.includes('mitad');
@@ -194,7 +203,10 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
                                 return null;
                             }
                             
-                            const filteredHistory = allStrategyStates[strategy].bettingSession.history.filter(bet => bet.bettingMode === statsMode);
+                            let filteredHistory = allStrategyStates[strategy].bettingSession.history.filter(bet => bet.bettingMode === statsMode);
+                             if (statsMode === 'docenas' && dozenModeFilter !== 'all') {
+                                filteredHistory = filteredHistory.filter(bet => bet.dozenBettingMode === dozenModeFilter);
+                            }
                             
                             return (
                                 <StrategyAnalysisCard 
@@ -212,7 +224,13 @@ const Statistics: React.FC<StatisticsProps> = ({ allStrategyStates, riskSettings
             {viewingHistory && (
                 <HistoryModal 
                     strategy={viewingHistory} 
-                    history={allStrategyStates[viewingHistory].bettingSession.history.filter(bet => bet.bettingMode === statsMode)} 
+                    history={(() => {
+                        let history = allStrategyStates[viewingHistory].bettingSession.history.filter(bet => bet.bettingMode === statsMode);
+                        if (statsMode === 'docenas' && dozenModeFilter !== 'all') {
+                            history = history.filter(bet => bet.dozenBettingMode === dozenModeFilter);
+                        }
+                        return history;
+                    })()}
                     onClose={() => setViewingHistory(null)} 
                 />
             )}

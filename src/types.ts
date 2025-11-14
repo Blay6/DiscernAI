@@ -21,6 +21,7 @@ export interface AnalysisResult {
   reason: string;
   frequencies: Frequencies;
   isBettingOpportunity: boolean;
+  analysisWindowSize: number;
 }
 
 export interface RiskSettings {
@@ -39,6 +40,7 @@ export interface RiskSettings {
     useAdvancedHalvesAnalysis: boolean;
     analysisWindow: number;
     activeStrategies: Strategy[];
+    dozenBettingMode: 'single' | 'double';
 }
 
 export interface BetHistoryEntry {
@@ -51,7 +53,8 @@ export interface BetHistoryEntry {
     result: 'WIN' | 'LOSS';
     profit: number;
     balance: number;
-    bettingMode: BettingMode; // Added to track the mode for each bet
+    bettingMode: BettingMode; 
+    dozenBettingMode?: 'single' | 'double'; // Added to track dozen bet type
 }
 
 export interface BettingSession {
